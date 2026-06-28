@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hydraulic Brake Simulation</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .control-panel { background: #f4f4f9; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        label { display: block; margin-bottom: 10px; font-weight: bold; }
+        input { margin-bottom: 20px; padding: 5px; width: 100px; }
+        button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        canvas { margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+    <h1>Hydraulic Brake Simulation 🏎️</h1>
+    
+    <div class="control-panel">
+        <label>Initial Vehicle Speed (m/s):
+            <input type="number" id="initSpeed" value="45">
+        </label>
+        <label>Constant Pedal Force (N):
+            <input type="number" id="pedalForce" value="200">
+        </label>
+        <button onclick="runSimulation()">Run Simulation</button>
+    </div>
+
+    <canvas id="brakeChart" width="800" height="400"></canvas>
+
+    <script>
+        let myChart = null; // Variable to hold our chart
+
+        function runSimulation() {
+            // Get user inputs
+            let speed = parseFloat(document.getElementById('initSpeed').value);
+            let force = parseFloat(document.getElementById('pedalForce').value);
+            
+            // Constants from your Python code
+            const masterArea = 5.0;
+            const slaveArea = 20.0;
+            const mass = 1500;
+            const baseFriction = 0.8;
+            const dt = 1.0;
+            
+            let temp = 20.0; // Starting temperature in Celsius
+            let currentFriction = baseFriction;
+            let time = 0;
+
+            // Arrays to store our data for the graph
+            let historyTime = [time];
+            let historySpeed = [speed];
+            let historyTemp = [temp];
+
+            // The physics loop (Translated from your Python while loop)
+            while (speed > 0 && time < 100) { // Added a 100s fail-safe
+                let pressure = force / masterArea;
+                let slaveForce = pressure * slaveArea;
+                let frictionForce = slaveForce * currentFriction;
+
+                // Brake Fade Simulation
+                let heatGenerated = frictionForce * speed * 0.001 * dt;
+                temp += heatGenerated;
+                temp -= (temp - 20.0) * 0.05 * dt; // Cooling
+
+                if (temp > 250) {
+                    let fadeFactor = Math.max(0.15, 1.0 - (temp - 250) * 0.005);
+                    currentFriction = baseFriction * fadeFactor;
+                } else {
+                    currentFriction = baseFriction;
+                }
+
+                let deceleration = frictionForce / mass;
+                speed -= deceleration * dt;
+                if (speed < 0) speed = 0; // Prevent negative speed
+                
+                time += dt;
+
+                // Save data points
+                historyTime.push(time);
+                historySpeed.push(speed);
+                historyTemp.push(temp);
+            }
+
+            drawChart(historyTime, historySpeed, historyTemp);
+        }
+
+        function drawChart(timeData, speedData, tempData) {
+            const ctx = document.getElementById('brakeChart').getContext('2d');
+            
+            // Destroy the old chart if it exists so we can draw a new one
+            if (myChart != null) {
+                myChart.destroy();
+            }
+
+            // Create the new chart
+            myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: timeData,
+                    datasets: [
+                        {
+                            label: 'Speed (m/s)',
+                            data: speedData,
+                            borderColor: 'blue',
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Rotor Temp (°C)',
+                            data: tempData,
+                            borderColor: 'red',
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: { title: { display: true, text: 'Time (s)' } },
+                        y: { title: { display: true, text: 'Speed (m/s)' }, position: 'left' },
+                        y1: { title: { display: true, text: 'Temperature (°C)' }, position: 'right', grid: { drawOnChartArea: false } }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
