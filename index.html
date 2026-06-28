@@ -3,128 +3,173 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hydraulic Brake Simulation</title>
+    <title>Live Brake Simulation</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-        .control-panel { background: #f4f4f9; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
-        label { display: block; margin-bottom: 10px; font-weight: bold; }
-        input { margin-bottom: 20px; padding: 5px; width: 100px; }
-        button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
-        button:hover { background: #0056b3; }
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; text-align: center;}
+        .dashboard { display: flex; justify-content: space-around; background: #2c3e50; color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .stat-box { font-size: 1.2em; }
+        .stat-value { font-size: 2em; font-weight: bold; color: #3498db; }
+        .controls { margin-bottom: 20px; }
+        
+        /* The Brake Pedal Button */
+        #brakeBtn { 
+            padding: 20px 50px; font-size: 1.5em; font-weight: bold; 
+            background: #e74c3c; color: white; border: none; border-radius: 10px; 
+            cursor: pointer; box-shadow: 0 5px #c0392b; user-select: none;
+        }
+        #brakeBtn:active { background: #c0392b; box-shadow: 0 2px #962d22; transform: translateY(3px); }
+        #brakeBtn:disabled { background: #7f8c8d; box-shadow: 0 5px #7f8c8d; cursor: not-allowed; transform: none; }
+        
         canvas { margin-top: 20px; }
     </style>
 </head>
 <body>
 
-    <h1>Hydraulic Brake Simulation 🏎️</h1>
+    <h1>Live Hydraulic Brake Simulation 🏎️</h1>
     
-    <div class="control-panel">
-        <label>Initial Vehicle Speed (m/s):
-            <input type="number" id="initSpeed" value="45">
-        </label>
-        <label>Constant Pedal Force (N):
-            <input type="number" id="pedalForce" value="200">
-        </label>
-        <button onclick="runSimulation()">Run Simulation</button>
+    <div class="controls">
+        <label>Starting Speed (m/s): <input type="number" id="initSpeed" value="45"></label>
+        <label>Pedal Force (N): <input type="number" id="pedalForce" value="300"></label>
+        <button onclick="startSimulation()" style="padding:5px 10px; margin-left:10px;">Start Engine</button>
+    </div>
+
+    <div class="dashboard">
+        <div class="stat-box">Speed<br><span id="speedDisplay" class="stat-value">0.0</span> m/s</div>
+        <div class="stat-box">Temp<br><span id="tempDisplay" class="stat-value" style="color:#e74c3c;">20</span> °C</div>
+        <div class="stat-box">Status<br><span id="statusDisplay" class="stat-value" style="color:#2ecc71;">Stopped</span></div>
+    </div>
+
+    <div>
+        <button id="brakeBtn" disabled>HOLD TO BRAKE</button>
     </div>
 
     <canvas id="brakeChart" width="800" height="400"></canvas>
 
     <script>
-        let myChart = null; // Variable to hold our chart
+        let myChart = null;
+        let simInterval = null;
+        let isBraking = false;
+        
+        // Physics variables
+        let speed = 0, temp = 20.0, time = 0;
+        const masterArea = 5.0, slaveArea = 20.0, mass = 1500, baseFriction = 0.8;
+        const dt = 0.1; // Run physics 10 times a second
 
-        function runSimulation() {
-            // Get user inputs
-            let speed = parseFloat(document.getElementById('initSpeed').value);
-            let force = parseFloat(document.getElementById('pedalForce').value);
+        // Setup Event Listeners for the Brake Button
+        const brakeBtn = document.getElementById('brakeBtn');
+        
+        // Mouse controls
+        brakeBtn.addEventListener('mousedown', () => isBraking = true);
+        brakeBtn.addEventListener('mouseup', () => isBraking = false);
+        brakeBtn.addEventListener('mouseleave', () => isBraking = false);
+        
+        // Touch controls for mobile
+        brakeBtn.addEventListener('touchstart', (e) => { e.preventDefault(); isBraking = true; });
+        brakeBtn.addEventListener('touchend', (e) => { e.preventDefault(); isBraking = false; });
+
+        function startSimulation() {
+            // Reset everything
+            clearInterval(simInterval);
+            speed = parseFloat(document.getElementById('initSpeed').value);
+            temp = 20.0;
+            time = 0;
+            isBraking = false;
             
-            // Constants from your Python code
-            const masterArea = 5.0;
-            const slaveArea = 20.0;
-            const mass = 1500;
-            const baseFriction = 0.8;
-            const dt = 1.0;
-            
-            let temp = 20.0; // Starting temperature in Celsius
+            document.getElementById('statusDisplay').innerText = "Cruising";
+            document.getElementById('statusDisplay').style.color = "#2ecc71";
+            brakeBtn.disabled = false;
+
+            initChart();
+
+            // Start the live loop (runs every 100 milliseconds)
+            simInterval = setInterval(physicsLoop, 100);
+        }
+
+        function physicsLoop() {
+            if (speed <= 0) {
+                speed = 0;
+                clearInterval(simInterval);
+                document.getElementById('statusDisplay').innerText = "Stopped";
+                document.getElementById('statusDisplay').style.color = "#e74c3c";
+                brakeBtn.disabled = true;
+                updateDashboard();
+                return;
+            }
+
             let currentFriction = baseFriction;
-            let time = 0;
+            let appliedForce = isBraking ? parseFloat(document.getElementById('pedalForce').value) : 0;
 
-            // Arrays to store our data for the graph
-            let historyTime = [time];
-            let historySpeed = [speed];
-            let historyTemp = [temp];
-
-            // The physics loop (Translated from your Python while loop)
-            while (speed > 0 && time < 100) { // Added a 100s fail-safe
-                let pressure = force / masterArea;
+            if (isBraking) {
+                document.getElementById('statusDisplay').innerText = "BRAKING!";
+                document.getElementById('statusDisplay').style.color = "#f1c40f";
+                
+                let pressure = appliedForce / masterArea;
                 let slaveForce = pressure * slaveArea;
                 let frictionForce = slaveForce * currentFriction;
 
-                // Brake Fade Simulation
+                // Heat logic
                 let heatGenerated = frictionForce * speed * 0.001 * dt;
                 temp += heatGenerated;
-                temp -= (temp - 20.0) * 0.05 * dt; // Cooling
 
                 if (temp > 250) {
                     let fadeFactor = Math.max(0.15, 1.0 - (temp - 250) * 0.005);
                     currentFriction = baseFriction * fadeFactor;
-                } else {
-                    currentFriction = baseFriction;
                 }
 
                 let deceleration = frictionForce / mass;
                 speed -= deceleration * dt;
-                if (speed < 0) speed = 0; // Prevent negative speed
-                
-                time += dt;
-
-                // Save data points
-                historyTime.push(time);
-                historySpeed.push(speed);
-                historyTemp.push(temp);
+            } else {
+                document.getElementById('statusDisplay').innerText = "Cruising";
+                document.getElementById('statusDisplay').style.color = "#2ecc71";
             }
 
-            drawChart(historyTime, historySpeed, historyTemp);
+            // Always apply a little cooling
+            temp -= (temp - 20.0) * 0.05 * dt; 
+            time += dt;
+
+            updateDashboard();
+            updateChart();
         }
 
-        function drawChart(timeData, speedData, tempData) {
-            const ctx = document.getElementById('brakeChart').getContext('2d');
-            
-            // Destroy the old chart if it exists so we can draw a new one
-            if (myChart != null) {
-                myChart.destroy();
-            }
+        function updateDashboard() {
+            document.getElementById('speedDisplay').innerText = speed.toFixed(1);
+            document.getElementById('tempDisplay').innerText = temp.toFixed(0);
+        }
 
-            // Create the new chart
+        function initChart() {
+            const ctx = document.getElementById('brakeChart').getContext('2d');
+            if (myChart != null) myChart.destroy();
+
             myChart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: timeData,
+                    labels: [0],
                     datasets: [
-                        {
-                            label: 'Speed (m/s)',
-                            data: speedData,
-                            borderColor: 'blue',
-                            yAxisID: 'y'
-                        },
-                        {
-                            label: 'Rotor Temp (°C)',
-                            data: tempData,
-                            borderColor: 'red',
-                            yAxisID: 'y1'
-                        }
+                        { label: 'Speed (m/s)', data: [speed], borderColor: '#3498db', yAxisID: 'y' },
+                        { label: 'Rotor Temp (°C)', data: [temp], borderColor: '#e74c3c', yAxisID: 'y1' }
                     ]
                 },
                 options: {
+                    animation: false, // Turn off animation for live updating
                     responsive: true,
                     scales: {
                         x: { title: { display: true, text: 'Time (s)' } },
-                        y: { title: { display: true, text: 'Speed (m/s)' }, position: 'left' },
-                        y1: { title: { display: true, text: 'Temperature (°C)' }, position: 'right', grid: { drawOnChartArea: false } }
+                        y: { title: { display: true, text: 'Speed' }, position: 'left', min: 0 },
+                        y1: { title: { display: true, text: 'Temperature' }, position: 'right', min: 0, grid: { drawOnChartArea: false } }
                     }
                 }
             });
+        }
+
+        function updateChart() {
+            // Only update the chart every 0.5 seconds to keep it looking clean
+            if (Math.abs((time % 0.5)) < 0.05) { 
+                myChart.data.labels.push(time.toFixed(1));
+                myChart.data.datasets[0].data.push(speed);
+                myChart.data.datasets[1].data.push(temp);
+                myChart.update();
+            }
         }
     </script>
 </body>
