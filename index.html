@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced Live Brake Simulation</title>
+    <title>Advanced Live Brake Simulation & Physics Lab</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; text-align: center;}
@@ -14,11 +14,14 @@
         .controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; text-align: right; background: #f4f4f9; padding: 15px; border-radius: 8px;}
         .controls-grid label { display: flex; justify-content: space-between; align-items: center; font-weight: bold;}
         .controls-grid input { padding: 5px; width: 80px; text-align: center;}
+        .controls-grid input[type="checkbox"] { width: 20px; height: 20px; cursor: pointer; }
         
-        /* The Track and Car */
         .track { width: 100%; height: 60px; background: #34495e; position: relative; overflow: hidden; border-radius: 8px; margin-bottom: 20px; border-bottom: 4px dashed #bdc3c7;}
         .car { font-size: 40px; position: absolute; left: 0%; top: 5px; user-select: none;}
 
+        .btn-group { margin-bottom: 20px; display: flex; justify-content: center; gap: 10px; }
+        .action-btn { padding: 10px 20px; font-size: 1.1em; border: none; border-radius: 5px; cursor: pointer; color: white; }
+        
         #brakeBtn { 
             padding: 15px 40px; font-size: 1.5em; font-weight: bold; 
             background: #e74c3c; color: white; border: none; border-radius: 10px; 
@@ -26,20 +29,32 @@
         }
         #brakeBtn:active { background: #c0392b; box-shadow: 0 2px #962d22; transform: translateY(3px); }
         #brakeBtn:disabled { background: #7f8c8d; box-shadow: 0 5px #7f8c8d; cursor: not-allowed; transform: none; }
+
+        /* Modal Layout */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); overflow-y: auto; }
+        .modal-content { background-color: #ffffff; margin: 4% auto; padding: 30px; border-radius: 12px; width: 85%; max-width: 700px; text-align: left; box-shadow: 0 4px 20px rgba(0,0,0,0.3); line-height: 1.6; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; margin-bottom: 20px; }
+        .physics-formula { background: #f8f9fa; padding: 10px; border-left: 4px solid #3498db; font-family: 'Courier New', Courier, monospace; margin: 10px 0; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <h1>Advanced Hydraulic Brakes 🏎️</h1>
+    <h1>Advanced Hydraulic Brakes & Physics Lab 🏎️</h1>
     
     <div class="controls-grid">
         <label>Start Speed (m/s): <input type="number" id="initSpeed" value="45"></label>
         <label>Pedal Force (N): <input type="number" id="pedalForce" value="400"></label>
         <label>Road Friction (μ): <input type="number" id="roadFriction" value="0.9" step="0.1"></label>
         <label>Cooling Rate: <input type="number" id="coolingRate" value="0.05" step="0.01"></label>
+        <label style="grid-column: span 2; justify-content: center; gap: 10px; background: #e8f4f8; padding: 5px; border-radius: 4px;">
+            Enable Anti-lock Braking System (ABS): <input type="checkbox" id="absToggle">
+        </label>
     </div>
     
-    <button onclick="startSimulation()" style="padding:10px 20px; font-size: 1.2em; background: #2ecc71; color: white; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 20px;">Start Engine</button>
+    <div class="btn-group">
+        <button onclick="startSimulation()" class="action-btn" style="background: #2ecc71;">Start Engine</button>
+        <button id="pauseBtn" onclick="pauseSimulation()" class="action-btn" style="background: #34495e;" disabled>Pause & Learn Physics</button>
+    </div>
 
     <div class="track">
         <div id="car" class="car">🏎️</div>
@@ -54,27 +69,54 @@
 
     <button id="brakeBtn" disabled>HOLD TO BRAKE</button>
 
-    <canvas id="brakeChart" width="800" height="350"></canvas>
+    <canvas id="brakeChart" width="800" height="320"></canvas>
+
+    <div id="physicsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 style="margin:0; color:#2c3e50;">Brake System Physics Document 📚</h2>
+                <button onclick="resumeSimulation()" class="action-btn" style="background:#2ecc71; padding:5px 15px;">Resume Simulation ➔</button>
+            </div>
+            
+            <h3>1. Fluid Dynamics: Pascal's Law</h3>
+            <p>Hydraulic brakes rely on the principle that pressure applied to a confined liquid is transmitted equally everywhere. The pressure created at the brake pedal is:</p>
+            <div class="physics-formula">Pressure = Pedal Force / Master Cylinder Area</div>
+            <p>Because the slave cylinder inside the wheel assembly has a much larger surface area, it multiplies your physical foot force:</p>
+            <div class="physics-formula">Clamping Force = Pressure × Slave Cylinder Area</div>
+
+            <h3>2. Thermodynamics: Energy Conservation</h3>
+            <p>Braking is the process of converting <strong>Kinetic Energy</strong> into <strong>Thermal Energy</strong> (Heat) through friction. The heat generated per millisecond in this simulation is calculated as:</p>
+            <div class="physics-formula">Heat Generated = Friction Force × Speed × Time Increment</div>
+            <p>At the same time, the rotor experiences thermal dissipation, shedding heat back into the environment depending on your chosen cooling variable.</p>
+
+            <h3>3. Materials Science: Brake Fade</h3>
+            <p>When kinetic energy is converted to heat too rapidly, the brake pads can surpass <strong>250°C</strong>. At this point, resin elements inside the pads begin to vaporize, creating a layer of gas that prevents smooth contact with the rotor. This drops your friction coefficient dramatically, requiring significantly more input force to stop.</p>
+
+            <h3>4. Tire Dynamics: ABS and Grip Limits</h3>
+            <p>The maximum force the tires can exert onto the road surface before breaking traction is limited by mass, gravity, and road conditions:</p>
+            <div class="physics-formula">Max Grip Force = Vehicle Mass × Gravity (9.81) × Road Friction Coefficient (μ)</div>
+            <p>If your brakes clamp harder than this threshold without ABS, the wheels lock up instantly, causing a <strong>SKID</strong>. When ABS is enabled, the onboard computer modulates brake pressure right at the threshold limit, preventing lockup and maintaining steering traction.</p>
+        </div>
+    </div>
 
     <script>
         let myChart = null;
         let simInterval = null;
         let isBraking = false;
+        let isPaused = false;
         
-        // Physics variables
-        let speed = 0, temp = 20.0, time = 0, distance = 0;
-        let totalDistance = 0; // For the stat board
-        let tickCount = 0;     // To fix the graph bug!
-        
+        let speed = 0, temp = 20.0, time = 0, distance = 0, totalDistance = 0, tickCount = 0;
         const masterArea = 5.0, slaveArea = 20.0, mass = 1500, baseBrakeFriction = 0.8, g = 9.81;
         const dt = 0.1;
 
-        // Button Event Listeners
         const brakeBtn = document.getElementById('brakeBtn');
-        brakeBtn.addEventListener('mousedown', () => isBraking = true);
+        const pauseBtn = document.getElementById('pauseBtn');
+        const modal = document.getElementById('physicsModal');
+
+        brakeBtn.addEventListener('mousedown', () => { if(!isPaused) isBraking = true; });
         brakeBtn.addEventListener('mouseup', () => isBraking = false);
         brakeBtn.addEventListener('mouseleave', () => isBraking = false);
-        brakeBtn.addEventListener('touchstart', (e) => { e.preventDefault(); isBraking = true; });
+        brakeBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if(!isPaused) isBraking = true; });
         brakeBtn.addEventListener('touchend', (e) => { e.preventDefault(); isBraking = false; });
 
         function startSimulation() {
@@ -82,21 +124,41 @@
             speed = parseFloat(document.getElementById('initSpeed').value);
             temp = 20.0; time = 0; distance = 0; totalDistance = 0; tickCount = 0;
             isBraking = false;
+            isPaused = false;
             
             document.getElementById('statusDisplay').innerText = "Cruising";
             document.getElementById('statusDisplay').style.color = "#2ecc71";
             brakeBtn.disabled = false;
+            pauseBtn.disabled = false;
 
             initChart();
-            simInterval = setInterval(physicsLoop, 50); // Run every 50ms for smoother animation
+            simInterval = setInterval(physicsLoop, 50);
+        }
+
+        function pauseSimulation() {
+            if (simInterval && !isPaused) {
+                clearInterval(simInterval);
+                isPaused = true;
+                document.getElementById('statusDisplay').innerText = "Paused Lab";
+                document.getElementById('statusDisplay').style.color = "#34495e";
+                modal.style.display = "block";
+            }
+        }
+
+        function resumeSimulation() {
+            modal.style.display = "none";
+            if (isPaused && speed > 0) {
+                isPaused = false;
+                isBraking = false; 
+                simInterval = setInterval(physicsLoop, 50);
+            }
         }
 
         function physicsLoop() {
-            tickCount++; // Increment integer tick
-            
-            // Fetch live variables
+            tickCount++;
             let roadFriction = parseFloat(document.getElementById('roadFriction').value);
             let coolingRate = parseFloat(document.getElementById('coolingRate').value);
+            let absEnabled = document.getElementById('absToggle').checked;
 
             if (speed <= 0) {
                 speed = 0;
@@ -104,77 +166,75 @@
                 document.getElementById('statusDisplay').innerText = "Stopped";
                 document.getElementById('statusDisplay').style.color = "#e74c3c";
                 brakeBtn.disabled = true;
-                updateDashboard();
+                pauseBtn.disabled = true;
+                updateVisuals();
                 return;
             }
 
+            // Calculate current brake friction dynamic to temperature (Fixes the fade bug!)
             let currentBrakeFriction = baseBrakeFriction;
+            if (temp > 250) {
+                let fadeFactor = Math.max(0.15, 1.0 - (temp - 250) * 0.005);
+                currentBrakeFriction = baseBrakeFriction * fadeFactor;
+            }
             
             if (isBraking) {
                 let appliedForce = parseFloat(document.getElementById('pedalForce').value);
                 let pressure = appliedForce / masterArea;
                 let slaveForce = pressure * slaveArea;
                 
-                // Intended brake force
                 let intendedFrictionForce = slaveForce * currentBrakeFriction;
-                
-                // Max grip the tires have on the road (mass * gravity * road_friction)
                 let maxGripForce = mass * g * roadFriction;
-                
                 let actualFrictionForce = intendedFrictionForce;
                 
                 if (intendedFrictionForce > maxGripForce) {
-                    // Skidding! Brakes locked up. We can only decelerate as much as the tires allow.
-                    actualFrictionForce = maxGripForce;
-                    document.getElementById('statusDisplay').innerText = "SKIDDING!";
-                    document.getElementById('statusDisplay').style.color = "#9b59b6";
+                    if (absEnabled) {
+                        // ABS modulates pressure to match maximum available traction perfectly
+                        actualFrictionForce = maxGripForce;
+                        document.getElementById('statusDisplay').innerText = "ABS ENGAGED ✨";
+                        document.getElementById('statusDisplay').style.color = "#3498db";
+                    } else {
+                        // Without ABS, wheels lock up and tire friction becomes static/skidding efficiency drop
+                        actualFrictionForce = maxGripForce * 0.8; // Skidding penalty
+                        document.getElementById('statusDisplay').innerText = "SKIDDING! ⚠️";
+                        document.getElementById('statusDisplay').style.color = "#9b59b6";
+                    }
                 } else {
                     document.getElementById('statusDisplay').innerText = "BRAKING";
                     document.getElementById('statusDisplay').style.color = "#f1c40f";
                 }
 
-                // Heat logic (Brakes fade at 250°C)
                 let heatGenerated = actualFrictionForce * speed * 0.001 * dt;
                 temp += heatGenerated;
-                if (temp > 250) {
-                    let fadeFactor = Math.max(0.15, 1.0 - (temp - 250) * 0.005);
-                    currentBrakeFriction = baseBrakeFriction * fadeFactor;
-                }
 
                 let deceleration = actualFrictionForce / mass;
                 speed -= deceleration * dt;
-                
             } else {
                 document.getElementById('statusDisplay').innerText = "Cruising";
                 document.getElementById('statusDisplay').style.color = "#2ecc71";
             }
 
-            // Apply customizable thermal dissipation (Cooling)
+            // Environment Cooling
             temp -= (temp - 20.0) * coolingRate * dt; 
-            
-            // Movement logic
             speed = Math.max(0, speed);
+            
             let distCovered = speed * dt;
             totalDistance += distCovered;
             distance += distCovered; 
-            
             time += dt;
 
             updateVisuals();
         }
 
         function updateVisuals() {
-            // Update Text Dashboard
             document.getElementById('speedDisplay').innerText = speed.toFixed(1);
             document.getElementById('tempDisplay').innerText = temp.toFixed(0);
             document.getElementById('distDisplay').innerText = totalDistance.toFixed(0);
             
-            // Move the car (loops every 100 meters)
             let visualPercentage = (distance % 100); 
             document.getElementById('car').style.left = visualPercentage + '%';
 
-            // Only update the graph every 5 ticks (0.5 seconds of simulation time)
-            if (tickCount % 5 === 0) { 
+            if (tickCount % 5 === 0 && !isPaused) { 
                 myChart.data.labels.push(time.toFixed(1));
                 myChart.data.datasets[0].data.push(speed);
                 myChart.data.datasets[1].data.push(temp);
