@@ -20,7 +20,7 @@
         .car { font-size: 40px; position: absolute; left: 0%; top: 5px; user-select: none;}
 
         .btn-group { margin-bottom: 20px; display: flex; justify-content: center; gap: 10px; }
-        .action-btn { padding: 10px 20px; font-size: 1.1em; border: none; border-radius: 5px; cursor: pointer; color: white; }
+        .action-btn { padding: 10px 20px; font-size: 1.1em; border: none; border-radius: 5px; cursor: pointer; color: white; font-weight: bold; }
         
         #brakeBtn { 
             padding: 15px 40px; font-size: 1.5em; font-weight: bold; 
@@ -29,6 +29,11 @@
         }
         #brakeBtn:active { background: #c0392b; box-shadow: 0 2px #962d22; transform: translateY(3px); }
         #brakeBtn:disabled { background: #7f8c8d; box-shadow: 0 5px #7f8c8d; cursor: not-allowed; transform: none; }
+
+        /* Thermal Lab Section Styling */
+        .lab-card { background: #ffffff; padding: 20px; border-radius: 8px; margin-top: 25px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); text-align: left; border: 1px solid #dcdde1; }
+        .lab-card select { padding: 6px; font-size: 1em; border-radius: 4px; border: 1px solid #ccc; cursor: pointer; }
+        #thermalLabOutput { background: #f8f9fa; padding: 15px; border-radius: 5px; font-family: 'Courier New', Courier, monospace; border-left: 5px solid #3498db; white-space: pre-line; line-height: 1.6; margin-top: 15px; font-size: 0.95em; }
 
         /* Modal Layout */
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); overflow-y: auto; }
@@ -42,7 +47,7 @@
     <h1>Advanced Hydraulic Brakes & Physics Lab 🏎️</h1>
     
     <div class="controls-grid">
-        <label>Start Speed (m/s): <input type="number" id="initSpeed" value="45"></label>
+        <label>Start Speed (m/s): <input type="number" id="initSpeed" value="45" oninput="runThermalLabCalculation()"></label>
         <label>Pedal Force (N): <input type="number" id="pedalForce" value="400"></label>
         <label>Road Friction (μ): <input type="number" id="roadFriction" value="0.9" step="0.1"></label>
         <label>Cooling Rate: <input type="number" id="coolingRate" value="0.05" step="0.01"></label>
@@ -70,6 +75,28 @@
     <button id="brakeBtn" disabled>HOLD TO BRAKE</button>
 
     <canvas id="brakeChart" width="800" height="320"></canvas>
+
+    <div class="lab-card">
+        <h2 style="color: #2c3e50; margin-top: 0; border-bottom: 2px solid #3498db; padding-bottom: 5px; display: flex; justify-content: space-between; align-items: center;">
+            Thermal Calculations Lab 🧪
+            <span style="font-size: 0.5em; background: #7f8c8d; color: white; padding: 3px 8px; border-radius: 10px;">Static Analysis</span>
+        </h2>
+        <p style="color: #5d6d7e; margin-bottom: 15px;">Analyze the theoretical thermal energy conversion ($Q$) and temperature increase ($\Delta T$) required to halt the vehicle from full speed based on system categories.</p>
+        
+        <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+            <label><strong>Select Rotor Category:</strong> 
+                <select id="rotorMaterial" onchange="runThermalLabCalculation()">
+                    <option value="iron">Standard Cast Iron (Organic System)</option>
+                    <option value="steel">Performance Steel (Semi-Metallic System)</option>
+                    <option value="ceramic">Track Carbon-Ceramic Matrix System</option>
+                </select>
+            </label>
+        </div>
+
+        <div id="thermalLabOutput">
+            Select a category above or alter your Initial Speed to compute thermodynamics variables.
+        </div>
+    </div>
 
     <div id="physicsModal" class="modal">
         <div class="modal-content">
@@ -118,6 +145,59 @@
         brakeBtn.addEventListener('mouseleave', () => isBraking = false);
         brakeBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if(!isPaused) isBraking = true; });
         brakeBtn.addEventListener('touchend', (e) => { e.preventDefault(); isBraking = false; });
+
+        // Run baseline calculation on load
+        window.addEventListener('DOMContentLoaded', () => {
+            runThermalLabCalculation();
+        });
+
+        function runThermalLabCalculation() {
+            let initSpeed = parseFloat(document.getElementById('initSpeed').value) || 0;
+            let carMass = 1500; 
+            
+            let material = document.getElementById('rotorMaterial').value;
+            let c = 460;        // Specific heat capacity (J/kg*C)
+            let rotorMass = 16; // Combined thermal mass of systems (kg)
+            let matName = "";
+            
+            if (material === "iron") {
+                c = 460; rotorMass = 18.0; 
+                matName = "Standard Cast Iron (Organic)";
+            } else if (material === "steel") {
+                c = 500; rotorMass = 14.5;
+                matName = "Performance Steel (Semi-Metallic)";
+            } else if (material === "ceramic") {
+                c = 800; rotorMass = 9.0;
+                matName = "Track Carbon-Ceramic Matrix";
+            }
+            
+            // Kinetic Energy Calculation: KE = 0.5 * m * v^2
+            let ke = 0.5 * carMass * Math.pow(initSpeed, 2); 
+            let keKJ = ke / 1000;
+            
+            // Temperature rise equation: deltaT = Q / (m * c)
+            let deltaT = ke / (rotorMass * c);
+            let finalTemp = 20.0 + deltaT;
+            
+            let outputHTML = `<b style="color:#2980b9;">🧪 EXPERIMENT REPORT: ${matName.toUpperCase()}</b>\n`;
+            outputHTML += `• Vehicle Kinetic Energy (KE): 0.5 × ${carMass}kg × (${initSpeed} m/s)² = <b>${keKJ.toFixed(1)} kJ</b>\n`;
+            outputHTML += `• Conversion target thermal energy load (Q): <b>${keKJ.toFixed(1)} kJ</b>\n`;
+            outputHTML += `• Total Combined Component Mass: <b>${rotorMass.toFixed(1)} kg</b>\n`;
+            outputHTML += `• Specific Heat Capacity value (c): <b>${c} J/kg·°C</b>\n`;
+            outputHTML += `• Formula Applied: <span style="background:#eef1f6; padding:2px 4px; border-radius:3px;">ΔT = Q / (Mass × c)</span>\n`;
+            outputHTML += `• Calculated Temperature Jump (ΔT): ${ke.toFixed(0)}J / (${rotorMass.toFixed(1)}kg × ${c}) = <b>+${deltaT.toFixed(1)}°C</b>\n`;
+            outputHTML += `• Projected Total Temperature Spike: 20°C (Ambient) + ${deltaT.toFixed(1)}°C = `;
+            
+            if (finalTemp > 250) {
+                outputHTML += `<b style="color: #e74c3c;">${finalTemp.toFixed(1)}°C</b>\n\n`;
+                outputHTML += `<span style="color: #c0392b; font-weight:bold;">⚠️ BREAKDOWN DANGER: Under full deployment, this configuration exceeds the 250°C fade ceiling. Vaporization of resin elements will initiate.</span>`;
+            } else {
+                outputHTML += `<b style="color: #2ecc71;">${finalTemp.toFixed(1)}°C</b>\n\n`;
+                outputHTML += `<span style="color: #27ae60; font-weight:bold;">✅ STABLE MATERIAL RADIAN: Thermal capacity is robust enough to soak up this dissipation packet without structural fade breakdown.</span>`;
+            }
+            
+            document.getElementById('thermalLabOutput').innerHTML = outputHTML;
+        }
 
         function startSimulation() {
             clearInterval(simInterval);
@@ -171,7 +251,6 @@
                 return;
             }
 
-            // Calculate current brake friction dynamic to temperature (Fixes the fade bug!)
             let currentBrakeFriction = baseBrakeFriction;
             if (temp > 250) {
                 let fadeFactor = Math.max(0.15, 1.0 - (temp - 250) * 0.005);
@@ -189,13 +268,11 @@
                 
                 if (intendedFrictionForce > maxGripForce) {
                     if (absEnabled) {
-                        // ABS modulates pressure to match maximum available traction perfectly
                         actualFrictionForce = maxGripForce;
                         document.getElementById('statusDisplay').innerText = "ABS ENGAGED ✨";
                         document.getElementById('statusDisplay').style.color = "#3498db";
                     } else {
-                        // Without ABS, wheels lock up and tire friction becomes static/skidding efficiency drop
-                        actualFrictionForce = maxGripForce * 0.8; // Skidding penalty
+                        actualFrictionForce = maxGripForce * 0.8; 
                         document.getElementById('statusDisplay').innerText = "SKIDDING! ⚠️";
                         document.getElementById('statusDisplay').style.color = "#9b59b6";
                     }
@@ -214,7 +291,6 @@
                 document.getElementById('statusDisplay').style.color = "#2ecc71";
             }
 
-            // Environment Cooling
             temp -= (temp - 20.0) * coolingRate * dt; 
             speed = Math.max(0, speed);
             
