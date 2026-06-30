@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hydraulic Brake Circuit Simulator | Race Car Brake Dynamics Lab</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 980px; margin: 0 auto; padding: 20px; text-align: center; background: #f8f9fa;}
+        h1 { color: #2c3e50; margin-bottom: 5px; }
+        .subtitle { color: #7f8c8d; margin-bottom: 18px; font-size: 1.1em; }
+
+        .nav-row { margin-bottom: 22px; }
+        .nav-link {
+            display: inline-block; text-decoration: none; font-weight: bold; font-size: 0.95em;
+            color: #ffffff; background: #2c3e50; padding: 9px 18px; border-radius: 6px;
+            box-shadow: 0 3px #1a252f; transition: transform 0.1s;
+        }
+        .nav-link:hover { transform: translateY(-1px); }
+
+        .controls-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; text-align: right; background: #ffffff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .controls-grid label { display: flex; justify-content: space-between; align-items: center; font-weight: bold; font-size: 0.85em; color: #34495e;}
+        .controls-grid input { padding: 4px; width: 80px; text-align: center; border: 1px solid #ccd1d1; border-radius: 4px;}
+        .controls-grid .section-tag { grid-column: 1 / -1; text-align: left; font-size: 0.8em; color: #95a5a6; text-transform: uppercase; letter-spacing: 0.05em; margin: 6px 0 -4px 0; font-weight: bold; }
+
+        #brakeBtn {
+            padding: 15px 50px; font-size: 1.5em; font-weight: bold;
+            background: #e74c3c; color: white; border: none; border-radius: 10px;
+            cursor: pointer; box-shadow: 0 5px #c0392b; user-select: none; margin-bottom: 18px;
+        }
+        #brakeBtn:active { background: #c0392b; box-shadow: 0 2px #962d22; transform: translateY(3px); }
+
+        .dashboard { display: flex; justify-content: space-around; flex-wrap: wrap; background: #2c3e50; color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; gap: 10px; }
+        .stat-box { font-size: 0.9em; min-width: 100px; }
+        .stat-value { font-size: 1.4em; font-weight: bold; color: #3498db; display: block; margin-top: 5px; }
+
+        .diagram-card { background: #ffffff; padding: 15px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 1px solid #dcdde1; margin-bottom: 20px; }
+        svg { width: 100%; height: auto; display: block; }
+
+        .lab-card { background: #ffffff; padding: 20px; border-radius: 8px; margin-top: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); text-align: left; border: 1px solid #dcdde1; }
+        .lab-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 15px; }
+        .lab-box { background: #f8f9fa; padding: 12px; border-radius: 5px; font-family: 'Courier New', Courier, monospace; border-left: 4px solid #3498db; font-size: 0.9em; white-space: pre-line; }
+
+        .learning-section { background: #ffffff; padding: 25px; border-radius: 8px; margin-top: 25px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); text-align: left; border-top: 4px solid #2ecc71; }
+        .theory-block { background: #f1f2f6; padding: 15px; border-left: 4px solid #2ecc71; margin: 12px 0; border-radius: 4px; font-family: 'Courier New', Courier, monospace; font-size: 0.95em; }
+        .math-var { color: #e74c3c; font-weight: bold; }
+
+        .legend-row { display: flex; justify-content: center; gap: 22px; flex-wrap: wrap; margin: 10px 0 0 0; font-size: 0.85em; color: #34495e; }
+        .legend-swatch { display: inline-block; width: 18px; height: 6px; border-radius: 3px; margin-right: 6px; vertical-align: middle; }
+    </style>
+</head>
+<body>
+
+    <h1>Hydraulic Brake Circuit Simulator 🛠️</h1>
+    <div class="subtitle">In-Depth Pedal → Master Cylinder → Proportioning Valve → Caliper Flow Model</div>
+
+    <div class="nav-row">
+        <a class="nav-link" href="index.html">← Back to Thermal Dynamics Lab</a>
+    </div>
+
+    <div class="controls-grid">
+        <div class="section-tag">Pedal & Master Cylinder</div>
+        <label>Pedal Force (N): <input type="number" id="pedalForce" value="300" oninput="recompute()"></label>
+        <label>Pedal Ratio (:1): <input type="number" id="pedalRatio" value="4.5" step="0.1" oninput="recompute()"></label>
+        <label>MC Bore Ø (mm): <input type="number" id="mcBore" value="22.2" step="0.1" oninput="recompute()"></label>
+
+        <div class="section-tag">Front Circuit (Secondary — Direct)</div>
+        <label>Piston Ø (mm): <input type="number" id="frontPistonDia" value="42" step="0.5" oninput="recompute()"></label>
+        <label>Pistons / Caliper: <input type="number" id="frontPistonCount" value="2" step="1" oninput="recompute()"></label>
+        <label>Eff. Rotor R (mm): <input type="number" id="frontRotorR" value="110" step="1" oninput="recompute()"></label>
+
+        <div class="section-tag">Rear Circuit (Primary — Through Valve)</div>
+        <label>Piston Ø (mm): <input type="number" id="rearPistonDia" value="30" step="0.5" oninput="recompute()"></label>
+        <label>Pistons / Caliper: <input type="number" id="rearPistonCount" value="1" step="1" oninput="recompute()"></label>
+        <label>Eff. Rotor R (mm): <input type="number" id="rearRotorR" value="90" step="1" oninput="recompute()"></label>
+
+        <div class="section-tag">Proportioning Valve & Friction</div>
+        <label>Knee Pressure (bar): <input type="number" id="kneeBar" value="25" step="1" oninput="recompute()"></label>
+        <label>Valve Slope (0–1): <input type="number" id="valveSlope" value="0.35" step="0.05" oninput="recompute()"></label>
+        <label>Pad μ: <input type="number" id="padMu" value="0.45" step="0.01" oninput="recompute()"></label>
+    </div>
+
+    <button id="brakeBtn">HOLD TO BRAKE</button>
+
+    <div class="dashboard">
+        <div class="stat-box">Pedal Input<span id="dPedal" class="stat-value">0 N</span></div>
+        <div class="stat-box">MC Pressure<span id="dMc" class="stat-value">0 bar</span></div>
+        <div class="stat-box">Front Line<span id="dFront" class="stat-value" style="color:#e74c3c;">0 bar</span></div>
+        <div class="stat-box">Rear Line<span id="dRear" class="stat-value" style="color:#e67e22;">0 bar</span></div>
+        <div class="stat-box">Force Gain<span id="dGain" class="stat-value" style="color:#2ecc71;">0×</span></div>
+        <div class="stat-box">Valve Status<span id="dValve" class="stat-value" style="color:#bdc3c7;">OPEN</span></div>
+    </div>
+
+    <div class="diagram-card">
+        <svg id="circuitSvg" viewBox="0 0 900 780" xmlns="http://www.w3.org/2000/svg">
+
+            <text x="450" y="26" text-anchor="middle" font-size="15" font-weight="bold" fill="#7f8c8d" letter-spacing="2">FRONT AXLE</text>
+            <text x="450" y="755" text-anchor="middle" font-size="15" font-weight="bold" fill="#7f8c8d" letter-spacing="2">REAR AXLE</text>
+
+            <!-- ===== FRONT CIRCUIT PIPING (secondary, direct, no valve) ===== -->
+            <path id="pipeFrontL" d="M 520,360 L 520,225 L 150,225 L 150,155" fill="none" stroke="#bdc3c7" stroke-width="7" stroke-linejoin="round" stroke-dasharray="10 8"/>
+            <path id="pipeFrontR" d="M 520,360 L 520,225 L 750,225 L 750,155" fill="none" stroke="#bdc3c7" stroke-width="7" stroke-linejoin="round" stroke-dasharray="10 8"/>
+            <text x="540" y="218" font-size="12" fill="#e74c3c" font-weight="bold">FRONT CIRCUIT (secondary)</text>
+
+            <!-- ===== REAR CIRCUIT PIPING (primary, through proportioning valve) ===== -->
+            <path id="pipeRearL" d="M 390,400 L 390,460 M 390,500 L 390,565 L 150,565 L 150,605" fill="none" stroke="#bdc3c7" stroke-width="7" stroke-linejoin="round" stroke-dasharray="10 8"/>
+            <path id="pipeRearR" d="M 390,400 L 390,460 M 390,500 L 390,565 L 750,565 L 750,605" fill="none" stroke="#bdc3c7" stroke-width="7" stroke-linejoin="round" stroke-dasharray="10 8"/>
+            <text x="410" y="588" font-size="12" fill="#e67e22" font-weight="bold">REAR CIRCUIT (primary, valve-limited)</text>
+
+            <!-- ===== PROPORTIONING VALVE ===== -->
+            <g id="valveGroup">
+                <rect x="362" y="460" width="56" height="40" rx="5" fill="#2c3e50" stroke="#1a252f" stroke-width="2"/>
+                <text x="390" y="484" text-anchor="middle" font-size="9" fill="white" font-weight="bold">VALVE</text>
+            </g>
+            <text x="430" y="484" font-size="11" fill="#7f8c8d">Proportioning Valve</text>
+
+            <!-- ===== RESERVOIR ===== -->
+            <rect x="430" y="290" width="90" height="55" rx="4" fill="#aed6f1" stroke="#3498db" stroke-width="2"/>
+            <text x="475" y="322" text-anchor="middle" font-size="10" fill="#1b4f72" font-weight="bold">FLUID</text>
+            <text x="475" y="334" text-anchor="middle" font-size="10" fill="#1b4f72" font-weight="bold">RESERVOIR</text>
+            <line x1="455" y1="345" x2="455" y2="362" stroke="#3498db" stroke-width="4"/>
+            <line x1="500" y1="345" x2="500" y2="362" stroke="#3498db" stroke-width="4"/>
+
+            <!-- ===== MASTER CYLINDER ===== -->
+            <rect x="320" y="362" width="240" height="40" rx="4" fill="#ecf0f1" stroke="#2c3e50" stroke-width="2"/>
+            <rect id="primaryPiston" x="335" y="364" width="14" height="36" fill="#7f8c8d" stroke="#2c3e50"/>
+            <rect id="secondaryPiston" x="435" y="364" width="14" height="36" fill="#7f8c8d" stroke="#2c3e50"/>
+            <text x="440" y="418" text-anchor="middle" font-size="12" fill="#2c3e50" font-weight="bold">TANDEM MASTER CYLINDER</text>
+            <text id="mcLabel" x="440" y="432" text-anchor="middle" font-size="11" fill="#3498db" font-weight="bold">0.0 bar</text>
+
+            <!-- ===== PEDAL ASSEMBLY ===== -->
+            <line x1="260" y1="382" x2="335" y2="382" stroke="#7f8c8d" stroke-width="6" stroke-linecap="round" id="pushRod"/>
+            <g id="pedalGroup">
+                <line x1="180" y1="300" x2="140" y2="420" stroke="#2c3e50" stroke-width="8" stroke-linecap="round"/>
+                <rect x="105" y="412" width="50" height="22" rx="4" fill="#e74c3c" stroke="#962d22" stroke-width="2"/>
+            </g>
+            <circle cx="180" cy="300" r="5" fill="#2c3e50"/>
+            <text x="130" y="455" text-anchor="middle" font-size="12" fill="#2c3e50" font-weight="bold">BRAKE PEDAL</text>
+
+            <!-- Wheel/caliper groups injected by JS into #wheels -->
+            <g id="wheels"></g>
+        </svg>
+
+        <div class="legend-row">
+            <span><span class="legend-swatch" style="background:#bdc3c7;"></span>Unpressurized line</span>
+            <span><span class="legend-swatch" style="background:#e74c3c;"></span>Front line (pressurized)</span>
+            <span><span class="legend-swatch" style="background:#e67e22;"></span>Rear line (pressurized)</span>
+        </div>
+    </div>
+
+    <div class="lab-card">
+        <h2 style="color: #2c3e50; margin: 0 0 10px 0; border-bottom: 2px solid #3498db; padding-bottom: 5px;">
+            Live Clamping & Torque Readout
+        </h2>
+        <div class="lab-grid">
+            <div>
+                <h3 style="margin:0 0 8px 0; color:#c0392b;">🔴 Front Caliper (each)</h3>
+                <div id="frontLabOutput" class="lab-box"></div>
+            </div>
+            <div>
+                <h3 style="margin:0 0 8px 0; color:#d35400;">🟠 Rear Caliper (each)</h3>
+                <div id="rearLabOutput" class="lab-box"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="diagram-card" style="text-align:left;">
+        <h2 style="color: #2c3e50; margin: 0 0 4px 0; border-bottom: 2px solid #3498db; padding-bottom: 5px;">
+            Proportioning Valve Response Curve
+        </h2>
+        <p style="color:#57606f; font-size:0.88em; margin: 8px 0 14px 0;">
+            Line pressure at each axle as pedal force is swept from 0 N to 2000 N. The front line tracks the master cylinder 1:1.
+            The rear line follows it 1:1 too — until the <span class="math-var">knee pressure</span>, after which the valve throttles
+            further rear pressure rise to the configured slope. This is what keeps the rear wheels from locking up first when weight
+            transfers onto the front tires under hard braking.
+        </p>
+        <canvas id="curveChart" height="110"></canvas>
+    </div>
+
+    <div class="learning-section">
+        <h2 style="color: #2c3e50; margin-top: 0; border-bottom: 2px solid #2ecc71; padding-bottom: 8px;">🧠 Hydraulics Knowledge Center</h2>
+        <p style="color: #34495e; font-size: 0.95em; line-height: 1.5;">
+            Press and hold the pedal above. Every stage of the circuit — pedal leverage, hydraulic amplification, the proportioning
+            valve, and final clamp force — is being calculated live from the inputs in the control panel. Here's the chain of physics
+            behind it:
+        </p>
+
+        <h3 style="color: #2c3e50; margin-bottom: 5px;">1. Pedal Leverage</h3>
+        <p style="color: #57606f; margin: 0; font-size: 0.9em;">
+            The pedal is a lever. Your foot applies a force at the pad, but the pivot geometry multiplies it before it ever reaches
+            the master cylinder pushrod (<span class="math-var">pedal ratio</span>, typically 4:1 to 6:1 in road and race applications):
+        </p>
+        <div class="theory-block">
+            Pushrod Force (N) = Pedal Force (N) * Pedal Ratio
+        </div>
+
+        <h3 style="color: #2c3e50; margin-bottom: 5px;">2. Pascal's Law & Hydraulic Pressure</h3>
+        <p style="color: #57606f; margin: 0; font-size: 0.9em;">
+            The pushrod compresses the fluid inside the master cylinder's bore. Pressure is force spread over area — and because brake
+            fluid is (essentially) incompressible, that same pressure is transmitted equally to every line and every caliper piston
+            connected to the circuit:
+        </p>
+        <div class="theory-block">
+            Pressure (Pa) = Pushrod Force (N) / Bore Area (m²), where Bore Area = π * (bore diameter / 2)²
+        </div>
+
+        <h3 style="color: #2c3e50; margin-bottom: 5px;">3. Why the Master Cylinder Is Split in Two</h3>
+        <p style="color: #57606f; margin: 0; font-size: 0.9em;">
+            Modern brake systems use a <span class="math-var">tandem (dual-circuit) master cylinder</span> — two pistons in series,
+            each feeding an independent circuit. If one circuit springs a leak, the other piston still builds pressure and you keep
+            partial braking instead of total failure. This diagram routes the secondary (front) piston straight to the front
+            calipers, and the primary (rear) piston through a proportioning valve to the rears. Many road cars instead split the
+            circuits diagonally (one front + the opposite rear per circuit) for more even braking after a single-circuit failure —
+            same safety principle, different plumbing.
+        </p>
+
+        <h3 style="color: #2c3e50; margin-bottom: 5px;">4. The Proportioning Valve</h3>
+        <p style="color: #57606f; margin: 0; font-size: 0.9em;">
+            Under hard braking, weight transfers forward onto the front tires and off the rears, so the rear tires can supply far
+            less grip than the fronts. Without intervention, equal hydraulic pressure to all four corners would lock the rears
+            first. The proportioning valve lets rear pressure climb 1:1 with the front up to a knee point, then mechanically
+            restricts further rear pressure rise:
+        </p>
+        <div class="theory-block">
+            Rear Line Pressure = MC Pressure,                                         if MC Pressure ≤ Knee
+            Rear Line Pressure = Knee + (MC Pressure − Knee) * Slope,                  if MC Pressure &gt; Knee
+        </div>
+
+        <h3 style="color: #2c3e50; margin-bottom: 5px;">5. Caliper Clamp Force & Brake Torque</h3>
+        <p style="color: #57606f; margin: 0; font-size: 0.9em;">
+            At the wheel, line pressure pushes directly on the caliper piston face(s), squeezing the pad against the rotor. That
+            clamp force, acting at the rotor's effective friction radius on both pad faces, is what actually generates stopping
+            torque — the same torque value that feeds the kinetic-energy and thermal model on the main simulation page:
+        </p>
+        <div class="theory-block">
+            Clamp Force (N) = Line Pressure (Pa) * Piston Area (m²) * Piston Count
+            Brake Torque (N·m) = 2 * Pad μ * Clamp Force (N) * Effective Rotor Radius (m)
+        </div>
+        <p style="color: #57606f; margin: 10px 0 0 0; font-size: 0.9em;">
+            Note the "Force Gain" stat above the diagram: a few hundred newtons on the pedal routinely turns into multiple
+            kilonewtons of clamp force at each caliper. That multiplication is the combined product of pedal leverage and the bore/piston
+            area ratio — Pascal's Law doing the heavy lifting.
+        </p>
+    </div>
+
+    <script>
+        // ---------- Wheel layout ----------
+        const wheelDefs = [
+            { id: 'FL', cx: 150, cy: 110, axle: 'front', stubDy: 45 },
+            { id: 'FR', cx: 750, cy: 110, axle: 'front', stubDy: 45 },
+            { id: 'RL', cx: 150, cy: 650, axle: 'rear',  stubDy: -45 },
+            { id: 'RR', cx: 750, cy: 650, axle: 'rear',  stubDy: -45 }
+        ];
+        const wheels = {};
+        const svgNS = "http://www.w3.org/2000/svg";
+
+        function buildWheel(def) {
+            const g = document.createElementNS(svgNS, 'g');
+            g.setAttribute('id', 'wheel-' + def.id);
+
+            const tire = document.createElementNS(svgNS, 'circle');
+            tire.setAttribute('cx', def.cx); tire.setAttribute('cy', def.cy); tire.setAttribute('r', 46);
+            tire.setAttribute('fill', '#f8f9fa'); tire.setAttribute('stroke', '#34495e'); tire.setAttribute('stroke-width', 3);
+            g.appendChild(tire);
+
+            const rotor = document.createElementNS(svgNS, 'rect');
+            rotor.setAttribute('x', def.cx - 4); rotor.setAttribute('y', def.cy - 32);
+            rotor.setAttribute('width', 8); rotor.setAttribute('height', 64);
+            rotor.setAttribute('fill', '#bdc3c7'); rotor.setAttribute('stroke', '#7f8c8d'); rotor.setAttribute('stroke-width', 1.5);
+            rotor.setAttribute('id', 'rotor-' + def.id);
+            g.appendChild(rotor);
+
+            const bracket = document.createElementNS(svgNS, 'rect');
+            bracket.setAttribute('x', def.cx - 26); bracket.setAttribute('y', def.cy - 38);
+            bracket.setAttribute('width', 52); bracket.setAttribute('height', 76);
+            bracket.setAttribute('rx', 6); bracket.setAttribute('fill', 'none');
+            bracket.setAttribute('stroke', '#2c3e50'); bracket.setAttribute('stroke-width', 2.5);
+            g.appendChild(bracket);
+
+            ['L', 'R'].forEach(side => {
+                const sign = side === 'L' ? -1 : 1;
+                const piston = document.createElementNS(svgNS, 'rect');
+                piston.setAttribute('y', def.cy - 14); piston.setAttribute('width', 9); piston.setAttribute('height', 28);
+                piston.setAttribute('fill', '#7f8c8d'); piston.setAttribute('stroke', '#2c3e50');
+                piston.setAttribute('id', `piston-${def.id}-${side}`);
+                g.appendChild(piston);
+
+                const pad = document.createElementNS(svgNS, 'rect');
+                pad.setAttribute('y', def.cy - 24); pad.setAttribute('width', 6); pad.setAttribute('height', 48);
+                pad.setAttribute('fill', '#2c3e50');
+                pad.setAttribute('id', `pad-${def.id}-${side}`);
+                g.appendChild(pad);
+            });
+
+            const stubX = def.cx, stubY = def.cy + def.stubDy;
+            const stub = document.createElementNS(svgNS, 'circle');
+            stub.setAttribute('cx', stubX); stub.setAttribute('cy', stubY); stub.setAttribute('r', 4);
+            stub.setAttribute('fill', '#7f8c8d');
+            g.appendChild(stub);
+
+            const label = document.createElementNS(svgNS, 'text');
+            label.setAttribute('x', def.cx); label.setAttribute('y', def.cy + 62);
+            label.setAttribute('text-anchor', 'middle'); label.setAttribute('font-size', 13);
+            label.setAttribute('font-weight', 'bold'); label.setAttribute('fill', '#2c3e50');
+            label.textContent = def.id;
+            g.appendChild(label);
+
+            const sub = document.createElementNS(svgNS, 'text');
+            sub.setAttribute('id', 'sub-' + def.id);
+            sub.setAttribute('x', def.cx); sub.setAttribute('y', def.cy + 76);
+            sub.setAttribute('text-anchor', 'middle'); sub.setAttribute('font-size', 10);
+            sub.setAttribute('fill', '#7f8c8d'); sub.setAttribute('font-family', 'Courier New, monospace');
+            sub.textContent = '0 N · 0 N·m';
+            g.appendChild(sub);
+
+            document.getElementById('wheels').appendChild(g);
+            wheels[def.id] = { def, pistonL: g.querySelector(`#piston-${def.id}-L`), pistonR: g.querySelector(`#piston-${def.id}-R`),
+                                padL: g.querySelector(`#pad-${def.id}-L`), padR: g.querySelector(`#pad-${def.id}-R`),
+                                rotor: g.querySelector(`#rotor-${def.id}`), sub: sub };
+        }
+        wheelDefs.forEach(buildWheel);
+
+        function layoutWheelClamp(w, clearancePx) {
+            const cx = w.def.cx;
+            w.padL.setAttribute('x', cx - 4 - clearancePx - 6);
+            w.padR.setAttribute('x', cx + 4 + clearancePx);
+            w.pistonL.setAttribute('x', cx - 4 - clearancePx - 16);
+            w.pistonR.setAttribute('x', cx + 4 + clearancePx + 7);
+        }
+        Object.values(wheels).forEach(w => layoutWheelClamp(w, 7));
+
+        // ---------- Physics ----------
+        let braking = false;
+        let frac = 0; // eased 0..1 actuation fraction
+        let dashOffset = 0;
+        let maxVals = null;
+
+        const brakeBtn = document.getElementById('brakeBtn');
+        brakeBtn.addEventListener('mousedown', () => braking = true);
+        brakeBtn.addEventListener('mouseup', () => braking = false);
+        brakeBtn.addEventListener('mouseleave', () => braking = false);
+        brakeBtn.addEventListener('touchstart', e => { e.preventDefault(); braking = true; });
+        brakeBtn.addEventListener('touchend', e => { e.preventDefault(); braking = false; });
+
+        function num(id) { return parseFloat(document.getElementById(id).value) || 0; }
+
+        function computeAt(pedalForceN) {
+            const ratio = num('pedalRatio');
+            const mcBoreM = num('mcBore') / 1000;
+            const fPistonM = num('frontPistonDia') / 1000;
+            const fCount = num('frontPistonCount');
+            const fRotorM = num('frontRotorR') / 1000;
+            const rPistonM = num('rearPistonDia') / 1000;
+            const rCount = num('rearPistonCount');
+            const rRotorM = num('rearRotorR') / 1000;
+            const knee = num('kneeBar');
+            const slope = num('valveSlope');
+            const mu = num('padMu');
+
+            const pushRodN = pedalForceN * ratio;
+            const mcArea = Math.PI * Math.pow(mcBoreM / 2, 2);
+            const mcPa = mcArea > 0 ? pushRodN / mcArea : 0;
+            const mcBar = mcPa / 1e5;
+
+            const frontBar = mcBar;
+            const rearBar = mcBar <= knee ? mcBar : knee + (mcBar - knee) * slope;
+
+            const fPistonArea = Math.PI * Math.pow(fPistonM / 2, 2);
+            const rPistonArea = Math.PI * Math.pow(rPistonM / 2, 2);
+
+            const frontClampN = frontBar * 1e5 * fPistonArea * fCount;
+            const rearClampN = rearBar * 1e5 * rPistonArea * rCount;
+
+            const frontTorque = 2 * mu * frontClampN * fRotorM;
+            const rearTorque = 2 * mu * rearClampN * rRotorM;
+
+            return { pedalForceN, pushRodN, mcBar, frontBar, rearBar, frontClampN, rearClampN, frontTorque, rearTorque, knee };
+        }
+
+        let curveChart = null;
+
+        function recompute() {
+            maxVals = computeAt(num('pedalForce'));
+
+            // proportioning valve curve, swept 0..2000N pedal force
+            const fPts = [], rPts = [];
+            for (let p = 0; p <= 2000; p += 50) {
+                const v = computeAt(p);
+                fPts.push({ x: p, y: v.frontBar });
+                rPts.push({ x: p, y: v.rearBar });
+            }
+            if (!curveChart) {
+                const ctx = document.getElementById('curveChart').getContext('2d');
+                curveChart = new Chart(ctx, {
+                    type: 'line',
+                    data: { datasets: [
+                        { label: 'Front line (bar)', data: fPts, borderColor: '#e74c3c', pointRadius: 0, borderWidth: 2 },
+                        { label: 'Rear line (bar)', data: rPts, borderColor: '#e67e22', pointRadius: 0, borderWidth: 2 }
+                    ]},
+                    options: {
+                        responsive: true, animation: false,
+                        parsing: false,
+                        scales: {
+                            x: { type: 'linear', title: { display: true, text: 'Pedal Force (N)' } },
+                            y: { title: { display: true, text: 'Line Pressure (bar)' }, min: 0 }
+                        }
+                    }
+                });
+            } else {
+                curveChart.data.datasets[0].data = fPts;
+                curveChart.data.datasets[1].data = rPts;
+                curveChart.update();
+            }
+
+            render();
+        }
+
+        function lerpColor(a, b, t) {
+            const ah = a.match(/\w\w/g).map(x => parseInt(x, 16));
+            const bh = b.match(/\w\w/g).map(x => parseInt(x, 16));
+            const ch = ah.map((c, i) => Math.round(c + (bh[i] - c) * t));
+            return '#' + ch.map(c => c.toString(16).padStart(2, '0')).join('');
+        }
+
+        function render() {
+            if (!maxVals) return;
+            const v = maxVals;
+            const pedal = v.pedalForceN * frac;
+            const mcBar = v.mcBar * frac;
+            const frontBar = v.frontBar * frac;
+            const rearBar = v.rearBar * frac;
+            const frontClampN = v.frontClampN * frac;
+            const rearClampN = v.rearClampN * frac;
+            const frontTorque = v.frontTorque * frac;
+            const rearTorque = v.rearTorque * frac;
+            const gain = pedal > 1 ? frontClampN / pedal : 0;
+
+            document.getElementById('dPedal').innerText = pedal.toFixed(0) + ' N';
+            document.getElementById('dMc').innerText = mcBar.toFixed(1) + ' bar';
+            document.getElementById('dFront').innerText = frontBar.toFixed(1) + ' bar';
+            document.getElementById('dRear').innerText = rearBar.toFixed(1) + ' bar';
+            document.getElementById('dGain').innerText = gain.toFixed(1) + '×';
+
+            const valveActive = v.mcBar * frac > v.knee && frac > 0.02;
+            const valveEl = document.getElementById('dValve');
+            valveEl.innerText = valveActive ? 'LIMITING' : 'OPEN';
+            valveEl.style.color = valveActive ? '#e67e22' : '#2ecc71';
+            document.getElementById('valveGroup').children[0].setAttribute('fill', valveActive ? '#e67e22' : '#2c3e50');
+
+            document.getElementById('mcLabel').textContent = mcBar.toFixed(1) + ' bar';
+
+            // pistons inside MC
+            document.getElementById('primaryPiston').setAttribute('x', 335 + 22 * frac);
+            document.getElementById('secondaryPiston').setAttribute('x', 435 + 14 * frac);
+            document.getElementById('pushRod').setAttribute('x2', 335 + 22 * frac);
+
+            // pedal rotation
+            document.getElementById('pedalGroup').setAttribute('transform', `rotate(${-16 * frac} 180 300)`);
+
+            // pipe colors + flow
+            dashOffset -= (1 + frac * 14);
+            const frontColor = lerpColor('#bdc3c7', '#e74c3c', Math.min(1, frontBar / 60));
+            const rearColor = lerpColor('#bdc3c7', '#e67e22', Math.min(1, rearBar / 60));
+            ['pipeFrontL', 'pipeFrontR'].forEach(id => {
+                const el = document.getElementById(id);
+                el.setAttribute('stroke', frontColor);
+                el.setAttribute('stroke-dashoffset', dashOffset);
+            });
+            ['pipeRearL', 'pipeRearR'].forEach(id => {
+                const el = document.getElementById(id);
+                el.setAttribute('stroke', rearColor);
+                el.setAttribute('stroke-dashoffset', dashOffset);
+            });
+
+            // wheels
+            ['FL', 'FR'].forEach(id => updateWheel(id, frontBar, frontClampN, frontTorque, frontColor));
+            ['RL', 'RR'].forEach(id => updateWheel(id, rearBar, rearClampN, rearTorque, rearColor));
+
+            document.getElementById('frontLabOutput').innerHTML =
+                `• Line Pressure: ${frontBar.toFixed(2)} bar\n• Piston Area Total: ${(Math.PI * Math.pow(num('frontPistonDia')/2000,2) * num('frontPistonCount') * 1e4).toFixed(2)} cm²\n• Clamp Force: ${frontClampN.toFixed(0)} N\n• Brake Torque: ${frontTorque.toFixed(1)} N·m`;
+            document.getElementById('rearLabOutput').innerHTML =
+                `• Line Pressure: ${rearBar.toFixed(2)} bar\n• Piston Area Total: ${(Math.PI * Math.pow(num('rearPistonDia')/2000,2) * num('rearPistonCount') * 1e4).toFixed(2)} cm²\n• Clamp Force: ${rearClampN.toFixed(0)} N\n• Brake Torque: ${rearTorque.toFixed(1)} N·m`;
+        }
+
+        function updateWheel(id, lineBar, clampN, torqueNm, color) {
+            const w = wheels[id];
+            const clearance = 7 * (1 - Math.min(1, frac * 1.05));
+            layoutWheelClamp(w, Math.max(0, clearance));
+            const heat = Math.min(1, lineBar / 50);
+            w.padL.setAttribute('fill', lerpColor('#2c3e50', color, heat * 0.7));
+            w.padR.setAttribute('fill', lerpColor('#2c3e50', color, heat * 0.7));
+            w.rotor.setAttribute('fill', lerpColor('#bdc3c7', '#f6c39a', heat));
+            w.sub.textContent = `${clampN.toFixed(0)} N · ${torqueNm.toFixed(1)} N·m`;
+        }
+
+        function loop() {
+            const target = braking ? 1 : 0;
+            frac += (target - frac) * 0.12;
+            if (Math.abs(target - frac) < 0.002) frac = target;
+            render();
+            requestAnimationFrame(loop);
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            recompute();
+            requestAnimationFrame(loop);
+        });
+    </script>
+</body>
+</html>
